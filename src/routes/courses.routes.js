@@ -14,90 +14,110 @@ function canAccess(req, resource) {
 }
 
 // POST /api/courses
-router.post('/', authenticate, async (req, res) => {
-  const { course_code, title, semester, instructor_name } = req.body;
+router.post('/', authenticate, async (req, res, next) => {
+  try {
+    const { course_code, title, semester, instructor_name } = req.body;
 
-  if (!course_code || !title || !semester) {
-    return res.status(400).json({ error: 'course_code, title, and semester are required' });
+    if (!course_code || !title || !semester) {
+      return res.status(400).json({ error: 'course_code, title, and semester are required' });
+    }
+
+    const course = await prisma.course.create({
+      data: {
+        user_id: req.user.id,
+        course_code,
+        title,
+        semester,
+        instructor_name: instructor_name || null,
+      },
+    });
+
+    return res.status(201).json(course);
+  } catch (err) {
+    next(err);
   }
-
-  const course = await prisma.course.create({
-    data: {
-      user_id: req.user.id,
-      course_code,
-      title,
-      semester,
-      instructor_name: instructor_name || null,
-    },
-  });
-
-  return res.status(201).json(course);
 });
 
 // GET /api/courses
-router.get('/', authenticate, async (req, res) => {
-  const where = req.user.role === 'admin' ? {} : { user_id: req.user.id };
-  const courses = await prisma.course.findMany({ where });
-  return res.status(200).json({ courses });
+router.get('/', authenticate, async (req, res, next) => {
+  try {
+    const where = req.user.role === 'admin' ? {} : { user_id: req.user.id };
+    const courses = await prisma.course.findMany({ where });
+    return res.status(200).json({ courses });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // GET /api/courses/:id
-router.get('/:id', authenticate, async (req, res) => {
-  const id = parseId(req.params.id);
-  if (!id) return res.status(400).json({ error: 'ID must be a positive integer' });
+router.get('/:id', authenticate, async (req, res, next) => {
+  try {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'ID must be a positive integer' });
 
-  const course = await prisma.course.findUnique({ where: { id } });
-  if (!course) return res.status(404).json({ error: 'Course not found' });
-  if (!canAccess(req, course)) return res.status(403).json({ error: 'Access forbidden' });
+    const course = await prisma.course.findUnique({ where: { id } });
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+    if (!canAccess(req, course)) return res.status(403).json({ error: 'Access forbidden' });
 
-  return res.status(200).json(course);
+    return res.status(200).json(course);
+  } catch (err) {
+    next(err);
+  }
 });
 
 // PUT /api/courses/:id
-router.put('/:id', authenticate, async (req, res) => {
-  const id = parseId(req.params.id);
-  if (!id) return res.status(400).json({ error: 'ID must be a positive integer' });
+router.put('/:id', authenticate, async (req, res, next) => {
+  try {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'ID must be a positive integer' });
 
-  const { course_code, title, semester, instructor_name } = req.body;
+    const { course_code, title, semester, instructor_name } = req.body;
 
-  if (
-    course_code === undefined &&
-    title === undefined &&
-    semester === undefined &&
-    instructor_name === undefined
-  ) {
-    return res.status(400).json({ error: 'At least one field must be provided to update' });
+    if (
+      course_code === undefined &&
+      title === undefined &&
+      semester === undefined &&
+      instructor_name === undefined
+    ) {
+      return res.status(400).json({ error: 'At least one field must be provided to update' });
+    }
+
+    const course = await prisma.course.findUnique({ where: { id } });
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+    if (!canAccess(req, course)) return res.status(403).json({ error: 'Access forbidden' });
+
+    const updated = await prisma.course.update({
+      where: { id },
+      data: {
+        ...(course_code !== undefined && { course_code }),
+        ...(title !== undefined && { title }),
+        ...(semester !== undefined && { semester }),
+        ...(instructor_name !== undefined && { instructor_name }),
+      },
+    });
+
+    return res.status(200).json(updated);
+  } catch (err) {
+    next(err);
   }
-
-  const course = await prisma.course.findUnique({ where: { id } });
-  if (!course) return res.status(404).json({ error: 'Course not found' });
-  if (!canAccess(req, course)) return res.status(403).json({ error: 'Access forbidden' });
-
-  const updated = await prisma.course.update({
-    where: { id },
-    data: {
-      ...(course_code !== undefined && { course_code }),
-      ...(title !== undefined && { title }),
-      ...(semester !== undefined && { semester }),
-      ...(instructor_name !== undefined && { instructor_name }),
-    },
-  });
-
-  return res.status(200).json(updated);
 });
 
 // DELETE /api/courses/:id
-router.delete('/:id', authenticate, async (req, res) => {
-  const id = parseId(req.params.id);
-  if (!id) return res.status(400).json({ error: 'ID must be a positive integer' });
+router.delete('/:id', authenticate, async (req, res, next) => {
+  try {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: 'ID must be a positive integer' });
 
-  const course = await prisma.course.findUnique({ where: { id } });
-  if (!course) return res.status(404).json({ error: 'Course not found' });
-  if (!canAccess(req, course)) return res.status(403).json({ error: 'Access forbidden' });
+    const course = await prisma.course.findUnique({ where: { id } });
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+    if (!canAccess(req, course)) return res.status(403).json({ error: 'Access forbidden' });
 
-  await prisma.course.delete({ where: { id } });
+    await prisma.course.delete({ where: { id } });
 
-  return res.status(200).json({ message: 'Course deleted successfully', id });
+    return res.status(200).json({ message: 'Course deleted successfully', id });
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;
